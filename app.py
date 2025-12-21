@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import time
+import plotly.graph_objects as go
 
 # --------------------------------------------------
 # Page configuration
@@ -105,6 +106,37 @@ def recommend_songs(song_name, artist=None, top_n=10, alpha=0.75):
 
     return pd.DataFrame(results), False
 
+def plot_audio_radar(song_row):
+    features = [
+        "danceability", "energy", "speechiness",
+        "acousticness", "instrumentalness",
+        "liveness", "valence"
+    ]
+
+    values = song_row[features].values.tolist()
+    values.append(values[0])  # close radar
+
+    features.append(features[0])
+
+    fig = go.Figure(
+        data=[
+            go.Scatterpolar(
+                r=values,
+                theta=features,
+                fill="toself",
+                name="Audio Profile"
+            )
+        ]
+    )
+
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
+        showlegend=False,
+        title="🎵 Audio Feature Profile"
+    )
+
+    return fig
+
 # --------------------------------------------------
 # Sidebar controls
 # --------------------------------------------------
@@ -140,6 +172,19 @@ if st.sidebar.button("Recommend 🎶"):
 
     st.dataframe(results, use_container_width=True)
     st.caption(f"⏱ Response time: {latency:.2f} ms")
+
+# --- Radar Chart Section ---
+st.markdown("### 🎧 Audio Profile of Selected Song")
+
+song_row = df[
+    df["track_name"].str.lower() == song_name.lower()
+]
+
+if not song_row.empty:
+    st.plotly_chart(
+        plot_audio_radar(song_row.iloc[0]),
+        use_container_width=True
+    )
 
 # --------------------------------------------------
 # Footer
