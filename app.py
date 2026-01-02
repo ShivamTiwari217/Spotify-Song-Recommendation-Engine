@@ -9,11 +9,65 @@ import plotly.graph_objects as go
 # --------------------------------------------------
 st.set_page_config(
     page_title="🎧 Spotify Song Recommender",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-st.title("🎧 Spotify Song Recommendation Engine")
-st.caption("Content-Based Filtering using ANN (Cosine Similarity)")
+# --------------------------------------------------
+# Custom CSS
+# --------------------------------------------------
+st.markdown("""
+<style>
+    .stApp {
+        background: #0E1117;
+    }
+    .song-card {
+        background-color: #262730;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border-left: 5px solid #1DB954;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .song-title {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 5px;
+    }
+    .song-artist {
+        font-size: 1rem;
+        color: #b3b3b3;
+        margin-bottom: 10px;
+    }
+    .metric-label {
+        font-size: 0.8rem;
+        color: #b3b3b3;
+    }
+    .metric-value {
+        font-size: 1rem;
+        font-weight: bold;
+        color: #1DB954;
+    }
+    .stProgress > div > div > div > div {
+        background-color: #1DB954;
+    }
+    h1 {
+        color: #1DB954;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --------------------------------------------------
+# Header
+# --------------------------------------------------
+col1, col2 = st.columns([1, 4])
+with col1:
+    st.write("") # Spacer
+    st.markdown("# 🎧")
+with col2:
+    st.title("Spotify Song Recommender")
+    st.markdown("**Discover new music based on what you love.** Powered by Machine Learning.")
 
 # --------------------------------------------------
 # Load trained models (cached)
@@ -124,17 +178,54 @@ def plot_audio_radar(song_row):
                 r=values,
                 theta=features,
                 fill="toself",
-                name="Audio Profile"
+                name="Audio Profile",
+                line_color='#1DB954'
             )
         ]
     )
 
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 1], showticklabels=False),
+            bgcolor="rgba(0,0,0,0)"
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white"),
         showlegend=False,
         title="🎵 Audio Feature Profile"
     )
 
+    return fig
+
+
+def plot_feature_comparison(input_song, recommended_songs_df):
+    """
+    Compares the input song's features with the average of the recommended songs.
+    """
+    comparison_features = [
+        "danceability", "energy", "acousticness",
+        "instrumentalness", "valence"
+    ]
+
+    # Get values
+    input_values = input_song[comparison_features].values.flatten().tolist()
+    avg_values = recommended_songs_df[comparison_features].mean().tolist()
+
+    fig = go.Figure(data=[
+        go.Bar(name='Selected Song', x=comparison_features, y=input_values, marker_color='#1DB954'),
+        go.Bar(name='Avg. Recommendation', x=comparison_features, y=avg_values, marker_color='#535353')
+    ])
+
+    fig.update_layout(
+        barmode='group',
+        title="📊 Feature Comparison",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="white"),
+        yaxis=dict(gridcolor='#333'),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
     return fig
 
 # --------------------------------------------------
@@ -170,21 +261,61 @@ if st.sidebar.button("Recommend 🎶"):
     else:
         st.success("Here are your recommendations 🎧")
 
-    st.dataframe(results, use_container_width=True)
     st.caption(f"⏱ Response time: {latency:.2f} ms")
 
-# --- Radar Chart Section ---
-st.markdown("### 🎧 Audio Profile of Selected Song")
+    # Display results
+    for index, row in results.iterrows():
+        with st.container():
+            st.markdown(f"""
+            <div class="song-card">
+                <div class="song-title">{row['Track']}</div>
+                <div class="song-artist">{row['Artist']}</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span class="metric-label">Genre: {row['Genre']}</span>
+                    <span class="metric-value">{row['Final Score']:.2f}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-song_row = df[
-    df["track_name"].str.lower() == song_name.lower()
-]
+            # Show progress bars for details
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.caption("Similarity")
+                st.progress(float(row['Similarity']))
+            with col_b:
+                st.caption("Popularity")
+                st.progress(float(row['Popularity']) if row['Popularity'] <= 1.0 else float(row['Popularity']) / 100)
 
-if not song_row.empty:
-    st.plotly_chart(
-        plot_audio_radar(song_row.iloc[0]),
-        use_container_width=True
-    )
+    # --- Analytics Section ---
+    st.markdown("---")
+    st.header("📊 Analysis")
+
+    song_row = df[
+        df["track_name"].str.lower() == song_name.lower()
+    ]
+
+    if not song_row.empty:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Audio Profile")
+            st.plotly_chart(
+                plot_audio_radar(song_row.iloc[0]),
+                use_container_width=True
+            )
+
+        with col2:
+            st.subheader("Feature Comparison")
+            # Get features for recommended songs
+            recommended_features = df[df['track_name'].isin(results['Track'])]
+            if not recommended_features.empty:
+                st.plotly_chart(
+                    plot_feature_comparison(song_row.iloc[0], recommended_features),
+                    use_container_width=True
+                )
+
+    elif used_fallback:
+        st.info("Select a specific song to see detailed analytics.")
 
 # --------------------------------------------------
 # Footer
