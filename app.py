@@ -99,11 +99,20 @@ def random_popular_fallback(top_n=10):
     threshold = df["track_popularity"].quantile(0.80)
     pool = df[df["track_popularity"] >= threshold]
 
-    return (
-        pool.sample(n=min(top_n, len(pool)))
-        [["track_name", "track_artist", "playlist_genre", "track_popularity"]]
-        .reset_index(drop=True)
-    )
+    selected = pool.sample(n=min(top_n, len(pool)))
+
+    results = []
+    for _, row in selected.iterrows():
+        results.append({
+            "Track": row["track_name"],
+            "Artist": row["track_artist"],
+            "Genre": row["playlist_genre"],
+            "Similarity": 0.0,
+            "Popularity": row["track_popularity"], # Keep as 0-100 to match display logic
+            "Final Score": row["track_popularity"] # Simple score for fallback
+        })
+
+    return pd.DataFrame(results)
 
 # --------------------------------------------------
 # Recommendation logic
