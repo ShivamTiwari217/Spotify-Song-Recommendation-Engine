@@ -98,12 +98,21 @@ X = scaler.transform(df[audio_features]).astype("float32")
 def random_popular_fallback(top_n=10):
     threshold = df["track_popularity"].quantile(0.80)
     pool = df[df["track_popularity"] >= threshold]
-
-    return (
-        pool.sample(n=min(top_n, len(pool)))
-        [["track_name", "track_artist", "playlist_genre", "track_popularity"]]
-        .reset_index(drop=True)
-    )
+    
+    selected = pool.sample(n=min(top_n, len(pool)))
+    
+    results = []
+    for _, row in selected.iterrows():
+        results.append({
+            "Track": row["track_name"],
+            "Artist": row["track_artist"],
+            "Genre": row["playlist_genre"],
+            "Similarity": 0.0,
+            "Popularity": row["track_popularity"], # Keep as 0-100 to match display logic
+            "Final Score": row["track_popularity"] # Simple score for fallback
+        })
+        
+    return pd.DataFrame(results)
 
 # --------------------------------------------------
 # Recommendation logic
@@ -204,19 +213,19 @@ def plot_feature_comparison(input_song, recommended_songs_df):
     Compares the input song's features with the average of the recommended songs.
     """
     comparison_features = [
-        "danceability", "energy", "acousticness",
+        "danceability", "energy", "acousticness", 
         "instrumentalness", "valence"
     ]
-
+    
     # Get values
     input_values = input_song[comparison_features].values.flatten().tolist()
     avg_values = recommended_songs_df[comparison_features].mean().tolist()
-
+    
     fig = go.Figure(data=[
         go.Bar(name='Selected Song', x=comparison_features, y=input_values, marker_color='#1DB954'),
         go.Bar(name='Avg. Recommendation', x=comparison_features, y=avg_values, marker_color='#535353')
     ])
-
+    
     fig.update_layout(
         barmode='group',
         title="📊 Feature Comparison",
@@ -260,7 +269,7 @@ if st.sidebar.button("Recommend 🎶"):
         st.warning("Song not found — showing popular songs instead 🎵")
     else:
         st.success("Here are your recommendations 🎧")
-
+    
     st.caption(f"⏱ Response time: {latency:.2f} ms")
 
     # Display results
@@ -276,7 +285,7 @@ if st.sidebar.button("Recommend 🎶"):
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
+            
             # Show progress bars for details
             col_a, col_b = st.columns(2)
             with col_a:
@@ -289,21 +298,21 @@ if st.sidebar.button("Recommend 🎶"):
     # --- Analytics Section ---
     st.markdown("---")
     st.header("📊 Analysis")
-
+    
     song_row = df[
         df["track_name"].str.lower() == song_name.lower()
     ]
-
+    
     if not song_row.empty:
         col1, col2 = st.columns(2)
-
+        
         with col1:
             st.subheader("Audio Profile")
             st.plotly_chart(
                 plot_audio_radar(song_row.iloc[0]),
                 use_container_width=True
             )
-
+            
         with col2:
             st.subheader("Feature Comparison")
             # Get features for recommended songs
@@ -313,7 +322,7 @@ if st.sidebar.button("Recommend 🎶"):
                     plot_feature_comparison(song_row.iloc[0], recommended_features),
                     use_container_width=True
                 )
-
+    
     elif used_fallback:
         st.info("Select a specific song to see detailed analytics.")
 
